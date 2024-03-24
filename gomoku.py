@@ -1,28 +1,67 @@
 """This program was written with the help of algorithms from AIMA book/github"""
+
 import copy
 import itertools
 import random
-from collections import namedtuple , Counter, defaultdict
+from collections import namedtuple, Counter, defaultdict
 import math
 import functools
 import numpy as np
 
+"""
+Game rules: Players alternate turns placing a stone of their color (white or black) on an empty
+intersection on a 15x15 Go board. Black plays first. The first player's first stone must be placed
+in the center of the board. The second player's first stone may be placed anywhere on the board.
+The first player's second stone must be placed at least three intersections away from the first
+stone (two empty intersections in between the two stones). The winner is the first player to form
+an unbroken line of five stones of their color horizontally, vertically, or diagonally. If the board is
+completely filled and no one can make a line of 5 stones, then the game ends in a draw.
+"""
 cache = functools.lru_cache(10**6)
 
+# class Player:
 
-class Game:
-    """A game is similar to a problem, but it has a utility for each
-    state and a terminal test instead of a path cost and a goal
-    test. To create a game, subclass this class and implement actions,
-    result, utility, and terminal_test. You may override display and
-    successors or you can inherit their default methods. You will also
-    need to set the .initial attribute to the initial state; this can
+
+class Gomoku:
+    """
+    black : 1, plays first
+    white : 0
+    need to set the initial attribute to the initial state; this can
     be done in the constructor."""
+
+    # TODO goal
+    def __init__(self, initial, goal, to_move, p1stone, p2stone):
+        self.initial = initial
+        self.goal = goal
+        self.to_move = to_move
+        self.p1stone = p1stone
+        self.p2stone = p2stone
 
     def actions(self, state):
         """Return a list of the allowable moves at this point."""
-        raise NotImplementedError
-
+        actions = []
+        # If it's first player's first stone => center
+        if(self.p1stone == 1):
+            return (7, 7)
+        # If it's second player's first stone => anywhere on the board
+        elif(self.p2stone == 1):
+            for x in range(15):
+                for y in range(15):
+                    if(x != 7 and y != 7):
+                        actions.append((x, y))
+            return actions
+        # If it's the first player's second stone => at least three intersections away from the first stone (two empty intersections in between the two stones)
+        elif(self.p1stone == 2):
+            for x in range(15):
+                for y in range(15):
+                    if(4 < x < 7 and 4 < y < 7):
+                        continue
+                    actions.append((x, y))
+            return actions
+        # Otherwise any available square
+        # for 
+        return actions
+    
     def result(self, state, move):
         """Return the state that results from making a move from a state."""
         raise NotImplementedError
@@ -32,7 +71,11 @@ class Game:
         raise NotImplementedError
 
     def terminal_test(self, state):
-        """Return True if this is a final state for the game."""
+        """Return True if this is a final state for the game.
+        The winner is the first player to form
+        an unbroken line of five stones of their color horizontally, vertically, or diagonally. If the board is
+        completely filled and no one can make a line of 5 stones, then the game ends in a draw.
+        """
         return not self.actions(state)
 
     def to_move(self, state):
@@ -44,7 +87,7 @@ class Game:
         print(state)
 
     def __repr__(self):
-        return '<{}>'.format(self.__class__.__name__)
+        return "<{}>".format(self.__class__.__name__)
 
     def play_game(self, *players):
         """Play an n-person, move-alternating game."""
@@ -56,7 +99,6 @@ class Game:
                 if self.terminal_test(state):
                     self.display(state)
                     return self.utility(state, self.to_move(self.initial))
-
 
 
 # # MinMax Search
@@ -157,7 +199,9 @@ def alpha_beta_cutoff_search(state, game, d=4, cutoff_test=None, eval_fn=None):
 
     # Body of alpha_beta_cutoff_search starts here:
     # The default test cuts off at depth d or at a terminal state
-    cutoff_test = (cutoff_test or (lambda state, depth: depth > d or game.terminal_test(state)))
+    cutoff_test = cutoff_test or (
+        lambda state, depth: depth > d or game.terminal_test(state)
+    )
     eval_fn = eval_fn or (lambda state: game.utility(state, player))
     best_score = -np.inf
     beta = np.inf
@@ -168,6 +212,7 @@ def alpha_beta_cutoff_search(state, game, d=4, cutoff_test=None, eval_fn=None):
             best_score = v
             best_action = a
     return best_action
+
 
 # Players for Games
 
@@ -180,13 +225,13 @@ def query_player(game, state):
     print("")
     move = None
     if game.actions(state):
-        move_string = input('Your move? ')
+        move_string = input("Your move? ")
         try:
             move = eval(move_string)
         except NameError:
             move = move_string
     else:
-        print('no legal moves: passing turn to next player')
+        print("no legal moves: passing turn to next player")
     return move
 
 
@@ -204,15 +249,16 @@ def random_player(game, state):
 
 
 class Board(defaultdict):
-    """A board has the player to move, a cached utility value, 
+    """A board has the player to move, a cached utility value,
     and a dict of {(x, y): player} entries, where player is 'X' or 'O'."""
-    empty = '.'
-    off = '#'
-    
-    def __init__(self, width=8, height=8, to_move=None, **kwds):
+
+    empty = "."
+    off = "#"
+
+    def __init__(self, width=15, height=15, to_move=None, **kwds):
         self.__dict__.update(width=width, height=height, to_move=to_move, **kwds)
-        
-    def new(self, changes: dict, **kwds) -> 'Board':
+
+    def new(self, changes: dict, **kwds) -> "Board":
         "Given a dict of {(x, y): contents} changes, return a new Board with the changes."
         board = Board(width=self.width, height=self.height, **kwds)
         board.update(self)
@@ -225,14 +271,17 @@ class Board(defaultdict):
             return self.empty
         else:
             return self.off
-            
-    def __hash__(self): 
+
+    def __hash__(self):
         return hash(tuple(sorted(self.items()))) + hash(self.to_move)
-    
+
     def __repr__(self):
-        def row(y): return ' '.join(self[x, y] for x in range(self.width))
-        return '\n'.join(map(row, range(self.height))) +  '\n'
-    
+        def row(y):
+            return " ".join(self[x, y] for x in range(self.width))
+
+        return "\n".join(map(row, range(self.height))) + "\n"
+
+
 """
 Transposition Tables
 
@@ -241,6 +290,8 @@ In state-space search, we kept a table of `reached` states to prevent this. For 
 by applying the `@cache` decorator to the `min_value` and `max_value` functions. We'll use the suffix `_tt` to indicate a function 
 that uses these transisiton tables.
 """
+
+
 def minimax_search_tt(game, state):
     """Search game to determine best move; return (value, move) pair."""
 
@@ -270,15 +321,19 @@ def minimax_search_tt(game, state):
 
     return max_value(state)
 
-#For alpha-beta search, we can still use a cache, but it should be based just on the state, not on whatever values alpha and beta have.
+
+# For alpha-beta search, we can still use a cache, but it should be based just on the state, not on whatever values alpha and beta have.
 def cache1(function):
     "Like lru_cache(None), but only considers the first argument of function."
     cache = {}
+
     def wrapped(x, *args):
         if x not in cache:
             cache[x] = function(x, *args)
         return cache[x]
+
     return wrapped
+
 
 def alphabeta_search_tt(game, state):
     """Search game to determine best action; use alpha-beta pruning.
@@ -315,6 +370,8 @@ def alphabeta_search_tt(game, state):
         return v, move
 
     return max_value(state, -np.inf, +np.inf)
+
+
 # how to get time?
 # %time play_game(TicTacToe(), {'X':player(alphabeta_search_tt), 'O':player(minimax_search_tt)})
 
@@ -323,6 +380,7 @@ def alphabeta_search_tt(game, state):
 def cutoff_depth(d):
     """A cutoff function that searches to depth d."""
     return lambda game, state, depth: depth > d
+
 
 def h_alphabeta_search(game, state, cutoff=cutoff_depth(6), h=lambda s, p: 0):
     """Search game to determine best action; use alpha-beta pruning.
@@ -338,7 +396,7 @@ def h_alphabeta_search(game, state, cutoff=cutoff_depth(6), h=lambda s, p: 0):
             return h(state, player), None
         v, move = -np.inf, None
         for a in game.actions(state):
-            v2, _ = min_value(game.result(state, a), alpha, beta, depth+1)
+            v2, _ = min_value(game.result(state, a), alpha, beta, depth + 1)
             if v2 > v:
                 v, move = v2, a
                 alpha = max(alpha, v)
@@ -364,22 +422,48 @@ def h_alphabeta_search(game, state, cutoff=cutoff_depth(6), h=lambda s, p: 0):
 
     return max_value(state, -np.inf, +np.inf, 0)
 
+
 # class CountCalls:
 #     """Delegate all attribute gets to the object, and count them in ._counts"""
 #     def __init__(self, obj):
 #         self._object = obj
 #         self._counts = Counter()
-        
+
 #     def __getattr__(self, attr):
 #         "Delegate to the original object, after incrementing a counter."
 #         self._counts[attr] += 1
 #         return getattr(self._object, attr)
-    
+
 # def report(game, searchers):
 #     for searcher in searchers:
 #         game = CountCalls(game)
 #         searcher(game, game.initial)
 #         print('Result states: {:7,d}; Terminal tests: {:7,d}; for {}'.format(
 #             game._counts['result'], game._counts['is_terminal'], searcher.__name__))
-    
+
 # report(TicTacToe(), (alphabeta_search_tt,  alphabeta_search, h_alphabeta_search, minimax_search_tt))
+
+
+"""
+Takes the state as input and returns its value
+"""
+
+
+def evaluate1(game, state):
+    raise NotImplementedError
+
+
+"""
+Takes the state as input and returns its value
+"""
+
+
+def evaluate2(game, state):
+    raise NotImplementedError
+
+
+def input_move():
+    coordinates = input("Enter the coordinates in this format: <x y>\n").split()
+    coordinates = [int(i) for i in coordinates]
+    # Update
+    raise NotImplementedError
