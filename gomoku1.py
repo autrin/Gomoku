@@ -55,11 +55,11 @@ class Game:
     def is_terminal(self, state):
         """Return True if this is a final state for the game."""
         return not self.actions(state)
-    
+
     def utility(self, state, player):
         """Return the value of this final state to player."""
         raise NotImplementedError
-    
+
     def display(self, state):
         """Print or otherwise display the state."""
         print(state)
@@ -69,7 +69,7 @@ def play_game(game, strategies: dict, verbose=False):
     state = game.initial
     while not game.is_terminal(state):
         player = state.to_move
-        if player == 'B':  # Assuming 'B' is always the human player
+        if player == "B":  # Assuming 'B' is always the human player
             print("Your turn. Current board:")
             game.display(state)
             move = query_player(game, state)
@@ -78,10 +78,11 @@ def play_game(game, strategies: dict, verbose=False):
         else:
             raise ValueError(f"No strategy found for player {player}")
         state = game.result(state, move)
-        if verbose: 
-            print(f'Player {player} move: {move}')
+        if verbose:
+            print(f"Player {player} move: {move}")
             game.display(state)
     return state
+
 
 class Gomoku(Game):
     """
@@ -90,62 +91,56 @@ class Gomoku(Game):
     bStone and wStone are the numbers of the stones the players have placed
     """
 
-    def __init__(self, to_move="B", h=15, w=15, k=5, bStone=0, wStone=0):
+    def __init__(self, to_move="B", h=15, w=15, k=5):
         self.h = h  # height of the board
         self.w = w  # width of the board
         self.k = k  # how many back to back stones we need to have a winner
-        self.bStone = bStone
-        self.wStone = wStone
         self.to_move = to_move
         self.squares = {(x, y) for x in range(w) for y in range(h)}
-        self.initial = Board(height=h, width=w, to_move="B", utility=0)  # ?
+        self.initial = Board(
+            height=h, width=w, to_move="B", utility=0, bStone=0, wStone=0
+        )
 
     def actions(self, board):
-        """Return a list of the allowable moves at this point."""
-        if board.to_move == "B" and self.bStone == 0:
-            # Black's first move must be in the center
-            return {(7, 7)}
-        elif board.to_move == "W" and self.wStone == 0:
-            # White's first move can be anywhere except the center
-            return self.squares - {(7, 7)}
-        elif board.to_move == "B" and self.bStone == 1:
-            # Black's second move must be at least three intersections away from the first stone at (7, 7)
-            possible_moves = set()
-            for x in range(self.w):
-                for y in range(self.h):
-                    # Ensure the move is at least three intersections away from (7, 7)
-                    if abs(7 - x) >= 3 or abs(7 - y) >= 3:
-                        possible_moves.add((x, y))
+        # Update this method to calculate allowed moves based on bStone and wStone within the board
+        moves = set()
+        if board.to_move == "B":
+            if board.bStone == 0:
+                return {(7, 7)}  # Black's first move must be at the center
+            elif board.bStone == 1:
+                for x in range(self.w):
+                    for y in range(self.h):
+                        # Ensure the move is at least three intersections away from (7, 7)
+                        if abs(7 - x) >= 3 or abs(7 - y) >= 3:
+                            moves.add((x, y))
             # Exclude already occupied positions
-            return possible_moves - set(board)
-            # return possible_moves - set(board.board.keys())
-        else:
-            # Any other move can be anywhere that's not already occupied
-            return self.squares - set(board)
+            return moves - set(board)
+        elif board.to_move == "W":
+            if board.wStone == 0:
+                # White's first move can be anywhere except the center
+                return self.squares - {(7, 7)}
+        # General move calculation for all other cases
+        return self.squares - set(board.keys())  # Exclude occupied positions
 
     def result(self, board, square):
-        """Return the state that results from making a move from a state."""
         player = board.to_move
-        board = board.new({square: player}, to_move=("B" if player == "W" else "W"))
-        if player == 'B': self.bStone += 1
-        else: self.wStone += 1
-        directions = [(0, 1), (1, 0), (1, 1), (-1, 1)]
-        win = False
-        for dx, dy in directions:
-            if k_in_row(board, player, square, self.k, dx, dy, 0) or k_in_row(board, player, square, self.k, -dx, -dy, 0):
-                # Win condition met
-                win = True
-                break
-        # win = k_in_row(board, player, square, self.k)
-        board.utility = 0 if not win else +1 if player == "B" else -1
-        return board
+        new_bStone = board.bStone + 1 if player == "B" else board.bStone
+        new_wStone = board.wStone + 1 if player == "W" else board.wStone
+        new_board = board.new(
+            {square: player},
+            to_move=("B" if player == "W" else "W"),
+            bStone=new_bStone,
+            wStone=new_wStone,
+        )
+        win = k_in_row(new_board, player, square, self.k)
+        new_board.utility = 0 if not win else +1 if player == "B" else -1
+        return new_board
 
     def utility(self, board, player):
         """Return the value of this final state to player."""
         return board.utility if player == "B" else -board.utility
 
     def is_terminal(self, board):
-        # TODO
         """Return True if this is a final state for the game.
         The winner is the first player to form
         an unbroken line of five stones of their color horizontally, vertically, or diagonally. If the board is
@@ -164,119 +159,17 @@ class Gomoku(Game):
     def __repr__(self):
         return "<{}>".format(self.__class__.__name__)
 
-    # def play_game(self, *players):
-    #     """Play an n-person, move-alternating game."""
-    #     state = self.initial
-    #     while True:
-    #         for player in players:
-    #             move = player(self, state)
-    #             state = self.result(state, move)
-    #             if self.terminal_test(state):
-    #                 self.display(state)
-    #                 return self.utility(state, self.to_move(self.initial))
 
-def k_in_row(board, player, square, k, dx, dy, depth):
-    x, y = square
-    if not (0 <= x < board.width and 0 <= y < board.height):
-        return False  # Out of bounds
-    if depth == k:
-        return True  # Found k in a row
-    if board.get((x, y)) != player:
-        return False  # Non-matching or empty square
-    return k_in_row(board, player, (x + dx, y + dy), k, dx, dy, depth + 1)
+def k_in_row(board, player, square, k):  # ? Does this check the diagonal squares?
+    """True if player has k pieces in a line through square."""
 
+    def in_row(x, y, dx, dy):
+        return 0 if board[x, y] != player else 1 + in_row(x + dx, y + dy, dx, dy)
 
-# def k_in_row(board, player, square, k):  # ? Does this check the diagonal squares?
-#     """True if player has k pieces in a line through square."""
-
-#     def in_row(x, y, dx, dy, depth=0):
-#         print(f"Checking {x}, {y}")
-#         return 0 if board[x, y] != player or depth==k else 1 + in_row(x + dx, y + dy, dx, dy, depth+1)
-
-#     return any(
-#         in_row(*square, dx, dy) + in_row(*square, -dx, -dy) - 1 >= k
-#         for (dx, dy) in ((0, 1), (1, 0), (1, 1), (1, -1))
-#     )
-# def k_in_row(board, player, square, k):
-#     """True if player has k pieces in a line through square."""
-#     def in_row(x, y, dx, dy):
-#         # Directly use board[x, y] thanks to Board.__missing__
-#         return 0 if board[x, y] != player else 1 + in_row(x + dx, y + dy, dx, dy)
-
-#     # Check all four directions from the square
-#     return any(
-#         in_row(square[0] + dx, square[1] + dy, dx, dy) + in_row(square[0] - dx, square[1] - dy, dx, dy) - 1 >= k
-#         for dx, dy in [(0, 1), (1, 0), (1, 1), (1, -1)]
-#     )
-
-
-
-
-# # MinMax Search
-# def minmax_decision(state, game):
-#     """Given a state in a game, calculate the best move by searching
-#     forward all the way to the terminal states. [Figure 5.3]"""
-
-#     player = game.to_move(state)
-
-#     def max_value(state):
-#         if game.terminal_test(state):
-#             return game.utility(state, player)
-#         v = -np.inf
-#         for a in game.actions(state):
-#             v = max(v, min_value(game.result(state, a)))
-#         return v
-
-#     def min_value(state):
-#         if game.terminal_test(state):
-#             return game.utility(state, player)
-#         v = np.inf
-#         for a in game.actions(state):
-#             v = min(v, max_value(game.result(state, a)))
-#         return v
-
-#     # Body of minmax_decision:
-#     return max(game.actions(state), key=lambda a: min_value(game.result(state, a)))
-
-# def alpha_beta_search(state, game):
-#     """Search game to determine best action; use alpha-beta pruning.
-#     As in [Figure 5.7], this version searches all the way to the leaves."""
-
-#     player = game.to_move(state)
-
-#     # Functions used by alpha_beta
-#     def max_value(state, alpha, beta):
-#         if game.terminal_test(state):
-#             return game.utility(state, player)
-#         v = -np.inf
-#         for a in game.actions(state):
-#             v = max(v, min_value(game.result(state, a), alpha, beta))
-#             if v >= beta:
-#                 return v
-#             alpha = max(alpha, v)
-#         return v
-
-#     def min_value(state, alpha, beta):
-#         if game.terminal_test(state):
-#             return game.utility(state, player)
-#         v = np.inf
-#         for a in game.actions(state):
-#             v = min(v, max_value(game.result(state, a), alpha, beta))
-#             if v <= alpha:
-#                 return v
-#             beta = min(beta, v)
-#         return v
-
-#     # Body of alpha_beta_search:
-#     best_score = -np.inf
-#     beta = np.inf
-#     best_action = None
-#     for a in game.actions(state):
-#         v = min_value(game.result(state, a), best_score, beta)
-#         if v > best_score:
-#             best_score = v
-#             best_action = a
-#     return best_action
+    return any(
+        in_row(*square, dx, dy) + in_row(*square, -dx, -dy) - 1 >= k
+        for (dx, dy) in ((0, 1), (1, 0), (1, 1), (1, -1))
+    )
 
 
 def alpha_beta_cutoff_search(state, game, d=4, cutoff_test=None, eval_fn=None):  # *
@@ -324,22 +217,7 @@ def alpha_beta_cutoff_search(state, game, d=4, cutoff_test=None, eval_fn=None): 
             best_action = a
     return best_action
 
-# def query_player(game, state):
-#     """Make a move by querying standard input."""
-#     print("current state:")
-#     game.display(state)
-#     print("available moves: {}".format(game.actions(state)))
-#     print("")
-#     move = None
-#     if game.actions(state):
-#         move_string = input("Your move? ")
-#         try:
-#             move = eval(move_string)
-#         except NameError:
-#             move = move_string
-#     else:
-#         print("no legal moves: passing turn to next player")
-#     return move
+
 def query_player(game, state):
     """Make a move by querying standard input."""
     print("Available moves: Enter the coordinates as 'x y'\nOr enter 'q' to quit")
@@ -347,7 +225,8 @@ def query_player(game, state):
     while move is None:
         try:
             move_input = input("Your move? ")
-            if move_input == 'q': exit #!
+            if move_input == "q":
+                exit  #!
             x, y = map(int, move_input.split())
             move = (x, y)
             if move not in game.actions(state):
@@ -363,14 +242,6 @@ def random_player(game, state):
     return random.choice(game.actions(state)) if game.actions(state) else None
 
 
-# def alpha_beta_player(game, state):
-#     return alpha_beta_search(state, game) #!
-
-
-# def expect_min_max_player(game, state):
-#     return expect_minmax(state, game)
-
-
 class Board(defaultdict):
     """A board has the player to move, a cached utility value,
     and a dict of {(x, y): player} entries, where player is 'W' or 'B'."""
@@ -378,12 +249,28 @@ class Board(defaultdict):
     empty = "."
     off = "#"
 
-    def __init__(self, width=15, height=15, to_move=None, **kwds):
-        self.__dict__.update(width=width, height=height, to_move=to_move, **kwds)
+    def __init__(self, width=15, height=15, to_move=None, bStone=0, wStone=0, **kwds):
+        self.__dict__.update(
+            width=width,
+            height=height,
+            to_move=to_move,
+            bStone=bStone,
+            wStone=wStone,
+            **kwds,
+        )
 
-    def new(self, changes: dict, **kwds) -> "Board":
+    def new(
+        self, changes: dict, to_move=None, bStone=None, wStone=None, **kwds
+    ) -> "Board":
         "Given a dict of {(x, y): contents} changes, return a new Board with the changes."
-        board = Board(width=self.width, height=self.height, **kwds)
+        board = Board(
+            width=self.width,
+            height=self.height,
+            to_move=to_move if to_move is not None else self.to_move,
+            bStone=bStone if bStone is not None else self.bStone,
+            wStone=wStone if wStone is not None else self.wStone,
+            **kwds,
+        )
         board.update(self)
         board.update(changes)
         return board
@@ -413,36 +300,6 @@ In state-space search, we kept a table of `reached` states to prevent this. For 
 by applying the `@cache` decorator to the `min_value` and `max_value` functions. We'll use the suffix `_tt` to indicate a function 
 that uses these transisiton tables.
 """
-
-
-# def minimax_search_tt(game, state):
-#     """Search game to determine best move; return (value, move) pair."""
-
-#     player = state.to_move
-
-#     @cache
-#     def max_value(state):
-#         if game.is_terminal(state):
-#             return game.utility(state, player), None
-#         v, move = -np.inf, None
-#         for a in game.actions(state):
-#             v2, _ = min_value(game.result(state, a))
-#             if v2 > v:
-#                 v, move = v2, a
-#         return v, move
-
-#     @cache
-#     def min_value(state):
-#         if game.is_terminal(state):
-#             return game.utility(state, player), None
-#         v, move = +np.inf, None
-#         for a in game.actions(state):
-#             v2, _ = max_value(game.result(state, a))
-#             if v2 < v:
-#                 v, move = v2, a
-#         return v, move
-
-#     return max_value(state)
 
 
 # For alpha-beta search, we can still use a cache, but it should be based just on the state, not on whatever values alpha and beta have.
@@ -572,31 +429,23 @@ def evaluate1(game, state):
 
     raise NotImplementedError
 
+
 def evaluate2(game, state):
     raise NotImplementedError
 
-def random_player(game, state): return random.choice(list(game.actions(state))) #Randomly chooses a move
+
+def random_player(game, state):
+    return random.choice(list(game.actions(state)))  # Randomly chooses a move
+
 
 def player(search_algorithm):
     """A game player who uses the specified search algorithm"""
     return lambda game, state: search_algorithm(game, state)[1]
 
+
 def main():
     game = Gomoku()
-    # Game loop
-        # Updates the game state with the user's move.
-        # Calls the alpha-beta search to generate the agent's move.
-        # Updates the game state with the agent's move.
-        # Repeats until the game ends.
-    play_game(game, {'W': player(h_alphabeta_search)} , verbose=True).utility
-    # while not game.terminal_test(game.initial):
-    #     if game.to_move(game.initial) == 'W':
-    #         coordinates = input("Enter the coordinates in this format: <x y>\n").split()
-    #         coordinates = [int(i) for i in coordinates]
-    #     else:
-    #         move = alpha_beta_cutoff_search(game.initial, game)
-    #     game.initial = game.result(game.initial, move)  # Update state
-    #     game.display(game.initial)
+    play_game(game, {"W": player(h_alphabeta_search)}, verbose=True).utility
 
 
 if __name__ == "__main__":
