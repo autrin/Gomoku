@@ -18,50 +18,36 @@ an unbroken line of five stones of their color horizontally, vertically, or diag
 completely filled and no one can make a line of 5 stones, then the game ends in a draw.
 """
 cache = functools.lru_cache(10**6)
+GameState = namedtuple("GameState", "to_move, utility, board, moves")
 
-# class Player:
+
+def vector_add(a, b):
+    """Component-wise addition of two vectors."""
+    if not (a and b):
+        return a or b
+    if hasattr(a, "__iter__") and hasattr(b, "__iter__"):
+        assert len(a) == len(b)
+        return list(map(vector_add, a, b))
+    else:
+        try:
+            return a + b
+        except TypeError:
+            raise Exception("Inputs must be in the same size!")
 
 
-class Gomoku:
-    """
-    black : 1, plays first
-    white : 0
-    need to set the initial attribute to the initial state; this can
+class Game:
+    """A game is similar to a problem, but it has a utility for each
+    state and a terminal test instead of a path cost and a goal
+    test. To create a game, subclass this class and implement actions,
+    result, utility, and terminal_test. You may override display and
+    successors or you can inherit their default methods. You will also
+    need to set the .initial attribute to the initial state; this can
     be done in the constructor."""
-
-    # TODO goal
-    def __init__(self, initial, goal, to_move, p1stone, p2stone):
-        self.initial = initial
-        self.goal = goal
-        self.to_move = to_move
-        self.p1stone = p1stone
-        self.p2stone = p2stone
 
     def actions(self, state):
         """Return a list of the allowable moves at this point."""
-        actions = []
-        # If it's first player's first stone => center
-        if(self.p1stone == 1):
-            return (7, 7)
-        # If it's second player's first stone => anywhere on the board
-        elif(self.p2stone == 1):
-            for x in range(15):
-                for y in range(15):
-                    if(x != 7 and y != 7):
-                        actions.append((x, y))
-            return actions
-        # If it's the first player's second stone => at least three intersections away from the first stone (two empty intersections in between the two stones)
-        elif(self.p1stone == 2):
-            for x in range(15):
-                for y in range(15):
-                    if(4 < x < 7 and 4 < y < 7):
-                        continue
-                    actions.append((x, y))
-            return actions
-        # Otherwise any available square
-        # for 
-        return actions
-    
+        raise NotImplementedError
+
     def result(self, state, move):
         """Return the state that results from making a move from a state."""
         raise NotImplementedError
@@ -71,11 +57,7 @@ class Gomoku:
         raise NotImplementedError
 
     def terminal_test(self, state):
-        """Return True if this is a final state for the game.
-        The winner is the first player to form
-        an unbroken line of five stones of their color horizontally, vertically, or diagonally. If the board is
-        completely filled and no one can make a line of 5 stones, then the game ends in a draw.
-        """
+        """Return True if this is a final state for the game."""
         return not self.actions(state)
 
     def to_move(self, state):
@@ -99,6 +81,103 @@ class Gomoku:
                 if self.terminal_test(state):
                     self.display(state)
                     return self.utility(state, self.to_move(self.initial))
+
+
+class Gomoku(Game):
+    """
+    b : black, plays first
+    w : w
+    bStone and wStone are the numbers of the stones the players have placed
+    """
+
+    def __init__(self, to_move, h=15, w=15, k=5, bStone=0, wStone=0):
+        self.h = h  # height of the board
+        self.w = w  # width of the board
+        self.k = k  # how many back to back stones we need to have a winner
+        self.bStone = bStone
+        self.wStone = wStone
+        self.to_move = to_move
+        self.squares = {(x, y) for x in range(w) for y in range(h)}
+        self.initial = Board(height=h, width=w, to_move="B", utility=0)  # ?
+
+    def actions(self, board):
+        """Return a list of the allowable moves at this point."""
+        if board.to_move == "B" and self.bStone == 0:
+            # Black's first move must be in the center
+            return {(7, 7)}
+        elif board.to_move == "W" and self.wStone == 0:
+            # White's first move can be anywhere except the center
+            return self.squares - {(7, 7)}
+        elif board.to_move == "B" and self.bStone == 1:
+            # Black's second move must be at least three intersections away from the first stone at (7, 7)
+            possible_moves = set()
+            for x in range(self.w):
+                for y in range(self.h):
+                    # Ensure the move is at least three intersections away from (7, 7)
+                    if abs(7 - x) >= 3 or abs(7 - y) >= 3:
+                        possible_moves.add((x, y))
+            # Exclude already occupied positions
+            return possible_moves - set(board)
+            # return possible_moves - set(board.board.keys())
+
+        else:
+            # Any other move can be anywhere that's not already occupied
+            return self.squares - set(board)
+
+    def result(self, board, square):
+        """Return the state that results from making a move from a state."""
+        player = board.to_move
+        board = board.new({square: player}, to_move=("B" if player == "W" else "W"))
+        win = k_in_row(board, player, square, self.k)
+        board.utility = 0 if not win else +1 if player == "B" else -1
+        return board
+
+    def utility(self, board, player):
+        """Return the value of this final state to player."""
+        return board.utility if player == "B" else -board.utility
+
+    def terminal_test(self, board):
+        # TODO
+        """Return True if this is a final state for the game.
+        The winner is the first player to form
+        an unbroken line of five stones of their color horizontally, vertically, or diagonally. If the board is
+        completely filled and no one can make a line of 5 stones, then the game ends in a draw.
+        """
+        return board.utility != 0 or len(self.squares) == len(board)
+
+    def to_move(self, board):
+        """Return the player whose move it is in this state."""
+        return board.to_move
+
+    def display(self, board):
+        """Print or otherwise display the state."""
+        print(board)
+
+    def __repr__(self):
+        return "<{}>".format(self.__class__.__name__)
+
+    def play_game(self, *players):
+        """Play an n-person, move-alternating game."""
+        state = self.initial
+        while True:
+            for player in players:
+                move = player(self, state)
+                state = self.result(state, move)
+                if self.terminal_test(state):
+                    self.display(state)
+                    return self.utility(state, self.to_move(self.initial))
+
+
+def k_in_row(board, player, square, k):  # ? Does this check the diagonal squares?
+    """True if player has k pieces in a line through square."""
+
+    def in_row(x, y, dx, dy):
+        return 0 if board[x, y] != player else 1 + in_row(x + dx, y + dy, dx, dy)
+
+    return any(
+        in_row(*square, dx, dy) + in_row(*square, -dx, -dy) - 1 >= k
+        for (dx, dy) in ((0, 1), (1, 0), (1, 1), (1, -1))
+    )
 
 
 # # MinMax Search
@@ -168,7 +247,7 @@ class Gomoku:
 #     return best_action
 
 
-def alpha_beta_cutoff_search(state, game, d=4, cutoff_test=None, eval_fn=None):
+def alpha_beta_cutoff_search(state, game, d=4, cutoff_test=None, eval_fn=None):  #!
     """Search game to determine best action; use alpha-beta pruning.
     This version cuts off search and uses an evaluation function."""
 
@@ -250,7 +329,7 @@ def random_player(game, state):
 
 class Board(defaultdict):
     """A board has the player to move, a cached utility value,
-    and a dict of {(x, y): player} entries, where player is 'X' or 'O'."""
+    and a dict of {(x, y): player} entries, where player is 'W' or 'B'."""
 
     empty = "."
     off = "#"
@@ -372,10 +451,6 @@ def alphabeta_search_tt(game, state):
     return max_value(state, -np.inf, +np.inf)
 
 
-# how to get time?
-# %time play_game(TicTacToe(), {'X':player(alphabeta_search_tt), 'O':player(minimax_search_tt)})
-
-
 # Heuristic Cutoffs
 def cutoff_depth(d):
     """A cutoff function that searches to depth d."""
@@ -450,6 +525,7 @@ Takes the state as input and returns its value
 
 
 def evaluate1(game, state):
+
     raise NotImplementedError
 
 
@@ -465,5 +541,34 @@ def evaluate2(game, state):
 def input_move():
     coordinates = input("Enter the coordinates in this format: <x y>\n").split()
     coordinates = [int(i) for i in coordinates]
-    # Update
+    # Updates the game state with the user's move.
+
+    # Calls the alpha-beta search to generate the agent's move.
+    # Updates the game state with the agent's move.
+    # Repeats until the game ends.
+
     raise NotImplementedError
+
+
+def random_player(game, state):
+    return random.choice(list(game.actions(state)))
+
+
+def player(search_algorithm):
+    """A game player who uses the specified search algorithm"""
+    return lambda game, state: search_algorithm(game, state)[1]
+
+
+def main():
+    game = Gomoku()  # TODO Initialize game with an appropriate state
+    while not game.terminal_test(game.initial):
+        if game.to_move(game.initial) == "user":
+            move = input_move()  # Implement this to accept user input
+        else:
+            move = alpha_beta_cutoff_search(game.initial, game)
+        game.initial = game.result(game.initial, move)  # Update state
+        game.display(game.initial)
+
+
+if __name__ == "__main__":
+    main()
