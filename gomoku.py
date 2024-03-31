@@ -1,4 +1,4 @@
-"""This program was written with the help of algorithms from AIMA book/github"""
+"""This program was written with the help of algorithms and classes from AIMA book/github"""
 
 import copy
 import itertools
@@ -451,20 +451,6 @@ def h_alphabeta_search(game, state, cutoff=cutoff_depth(3), h=evaluate_board):
 
 cache = functools.lru_cache(10**6)
 GameState = namedtuple("GameState", "to_move, utility, board, moves")
-
-
-def vector_add(a, b):
-    """Component-wise addition of two vectors."""
-    if not (a and b):
-        return a or b
-    if hasattr(a, "__iter__") and hasattr(b, "__iter__"):
-        assert len(a) == len(b)
-        return list(map(vector_add, a, b))
-    else:
-        try:
-            return a + b
-        except TypeError:
-            raise Exception("Inputs must be in the same size!")
 
 def random_player(game, state):
     return random.choice(list(game.actions(state)))  # Randomly chooses a move
